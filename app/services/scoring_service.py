@@ -1,6 +1,6 @@
 import logging
 import math
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 
 from app.domain.models import HourlyForecastPoint, Place, PlaceScore, Point
 from app.domain.scoring import ScoringWeights, WeatherPreferences
@@ -13,7 +13,9 @@ class ScoringService:
         self.prefs = prefs
         self.weights = weights
 
-    def score_place(self, place: Place, forecast: list[HourlyForecastPoint], home: Point) -> PlaceScore:
+    def score_place(
+        self, place: Place, forecast: list[HourlyForecastPoint], home: Point
+    ) -> PlaceScore:
         if not forecast:
             return self._zero_score(place)
 
@@ -22,7 +24,10 @@ class ScoringService:
 
         window_start, window_end = self._best_good_window(forecast)
         window_hours = (
-            (datetime.combine(date.min, window_end) - datetime.combine(date.min, window_start)).seconds
+            (
+                datetime.combine(date.min, window_end)
+                - datetime.combine(date.min, window_start)
+            ).seconds
             / 3600
             if window_start and window_end
             else 0
@@ -31,7 +36,9 @@ class ScoringService:
         distance_km = self._haversine(home, place.point)
         distance_score = max(0.0, 100.0 - distance_km)
 
-        good_window_score = min(100.0, window_hours / self.prefs.min_good_window_hours * 100)
+        good_window_score = min(
+            100.0, window_hours / self.prefs.min_good_window_hours * 100
+        )
 
         breakdown = {
             "weather_avg": avg_score,
@@ -40,7 +47,14 @@ class ScoringService:
         }
 
         final = (
-            avg_score * (self.weights.precip + self.weights.wind + self.weights.temp + self.weights.cloud) / 100
+            avg_score
+            * (
+                self.weights.precip
+                + self.weights.wind
+                + self.weights.temp
+                + self.weights.cloud
+            )
+            / 100
             + distance_score * self.weights.distance / 100
             + good_window_score * self.weights.good_window / 100
         )
@@ -60,13 +74,24 @@ class ScoringService:
         score = 100.0
         if hour.precip_mm > self.prefs.max_precip_mm_per_hour:
             score -= 40 * (hour.precip_mm / max(self.prefs.max_precip_mm_per_hour, 0.1))
-        if hour.precip_probability is not None and hour.precip_probability > self.prefs.max_precip_probability:
-            score -= 20 * ((hour.precip_probability - self.prefs.max_precip_probability) / 100)
+        if (
+            hour.precip_probability is not None
+            and hour.precip_probability > self.prefs.max_precip_probability
+        ):
+            score -= 20 * (
+                (hour.precip_probability - self.prefs.max_precip_probability) / 100
+            )
         if hour.wind_kmh > self.prefs.max_wind_kmh:
-            score -= 20 * ((hour.wind_kmh - self.prefs.max_wind_kmh) / max(self.prefs.max_wind_kmh, 1))
+            score -= 20 * (
+                (hour.wind_kmh - self.prefs.max_wind_kmh)
+                / max(self.prefs.max_wind_kmh, 1)
+            )
         if hour.temp_c < self.prefs.min_temp_c or hour.temp_c > self.prefs.max_temp_c:
             score -= 15
-        if hour.cloud_cover is not None and hour.cloud_cover > self.prefs.max_cloud_cover:
+        if (
+            hour.cloud_cover is not None
+            and hour.cloud_cover > self.prefs.max_cloud_cover
+        ):
             score -= 10 * ((hour.cloud_cover - self.prefs.max_cloud_cover) / 100)
         return max(0.0, score)
 
@@ -74,36 +99,57 @@ class ScoringService:
         self, forecast: list[HourlyForecastPoint]
     ) -> tuple[time | None, time | None]:
         good = [self._is_good_hour(h) for h in forecast]
-        best_start = best_end = None
-        current_start = None
+        best_start: time | None = None
+        best_end: time | None = None
+        current_start: time | None = None
         for i, ok in enumerate(good):
             if ok and current_start is None:
                 current_start = forecast[i].time.time()
             if (not ok or i == len(good) - 1) and current_start is not None:
                 end = forecast[i].time.time() if ok else forecast[i - 1].time.time()
-                if best_start is None or (end.hour - current_start.hour) > (
-                    best_end.hour - best_start.hour
-                ):
+                current_hours = self._window_duration_hours(current_start, end)
+                best_hours = (
+                    self._window_duration_hours(best_start, best_end)
+                    if best_start is not None and best_end is not None
+                    else 0.0
+                )
+                if best_start is None or current_hours > best_hours:
                     best_start, best_end = current_start, end
                 current_start = None
         return best_start, best_end
 
+    def _window_duration_hours(self, start: time, end: time) -> float:
+        start_dt = datetime.combine(date.min, start)
+        end_dt = datetime.combine(date.min, end)
+        if end_dt < start_dt:
+            end_dt += timedelta(days=1)
+        return (end_dt - start_dt).seconds / 3600
+
     def _is_good_hour(self, hour: HourlyForecastPoint) -> bool:
         return (
             hour.precip_mm <= self.prefs.max_precip_mm_per_hour
-            and (hour.precip_probability is None or hour.precip_probability <= self.prefs.max_precip_probability)
+            and (
+                hour.precip_probability is None
+                or hour.precip_probability <= self.prefs.max_precip_probability
+            )
             and hour.wind_kmh <= self.prefs.max_wind_kmh
             and self.prefs.min_temp_c <= hour.temp_c <= self.prefs.max_temp_c
-            and (hour.cloud_cover is None or hour.cloud_cover <= self.prefs.max_cloud_cover)
+            and (
+                hour.cloud_cover is None
+                or hour.cloud_cover <= self.prefs.max_cloud_cover
+            )
         )
 
     def _haversine(self, a: Point, b: Point) -> float:
-        R = 6371.0
+        earth_radius_km = 6371.0
         phi1, phi2 = math.radians(a.lat), math.radians(b.lat)
         dphi = math.radians(b.lat - a.lat)
         dlambda = math.radians(b.lon - a.lon)
-        x = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-        return 2 * R * math.atan2(math.sqrt(x), math.sqrt(1 - x))
+        x = (
+            math.sin(dphi / 2) ** 2
+            + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+        )
+        return 2 * earth_radius_km * math.atan2(math.sqrt(x), math.sqrt(1 - x))
 
     def _zero_score(self, place: Place) -> PlaceScore:
         return PlaceScore(
@@ -116,10 +162,14 @@ class ScoringService:
         )
 
     def _summary(self, score: float, start: time | None, end: time | None) -> str:
+        if start is not None and end is not None:
+            window = f", best window {start}-{end}"
+        else:
+            window = ""
         if score >= 80:
-            return f"Excellent, best window {start}-{end}"
+            return f"Excellent conditions{window}"
         if score >= 60:
-            return f"Good, best window {start}-{end}"
+            return f"Good conditions{window}"
         if score >= 40:
             return "Acceptable but with caveats"
         return "Poor conditions"

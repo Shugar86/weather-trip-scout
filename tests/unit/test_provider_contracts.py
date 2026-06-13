@@ -138,12 +138,8 @@ def test_overpass_get_candidate_places_mocked() -> None:
     mock_response = MagicMock()
     mock_response.json.return_value = response
     with patch("app.providers.geo.overpass.requests.post", return_value=mock_response):
-        towns = provider.get_candidate_places(
-            Point(lat=48.0, lon=11.0), 10.0, "towns"
-        )
-        nature = provider.get_candidate_places(
-            Point(lat=48.0, lon=11.0), 5.0, "nature"
-        )
+        towns = provider.get_candidate_places(Point(lat=48.0, lon=11.0), 10.0, "towns")
+        nature = provider.get_candidate_places(Point(lat=48.0, lon=11.0), 5.0, "nature")
 
     assert len(towns) == 2
     assert towns[0].name == "Test Town"
@@ -339,6 +335,7 @@ def test_open_weather_request_params() -> None:
     assert params["units"] == "metric"
     assert "current,minutely,daily,alerts" in params["exclude"]
 
+
 def test_staticmap_osm_is_map_builder() -> None:
     builder = StaticMapOSMBuilder()
     assert isinstance(builder, MapBuilder)
@@ -376,9 +373,7 @@ def test_staticmap_osm_build_map_returns_path() -> None:
 
 
 def test_staticmap_osm_build_map_empty_ranked_returns_none() -> None:
-    assert (
-        StaticMapOSMBuilder().build_map([], Point(lat=48.0, lon=11.0), 10.0) is None
-    )
+    assert StaticMapOSMBuilder().build_map([], Point(lat=48.0, lon=11.0), 10.0) is None
 
 
 def test_staticmap_osm_build_map_render_error_returns_none() -> None:

@@ -16,11 +16,15 @@ class ForecastService:
         self.primary = primary
         self.fallback = fallback
 
-    def get_forecast(self, place: Place, target_date: date) -> list[HourlyForecastPoint]:
+    def get_forecast(
+        self, place: Place, target_date: date
+    ) -> list[HourlyForecastPoint]:
         try:
             return self.primary.get_hourly_forecast(place.point, target_date)
         except Exception as exc:
-            logger.warning("Primary weather provider failed for %s: %s", place.name, exc)
+            logger.warning(
+                "Primary weather provider failed for %s: %s", place.name, exc
+            )
             if self.fallback is not None:
                 return self.fallback.get_hourly_forecast(place.point, target_date)
             raise

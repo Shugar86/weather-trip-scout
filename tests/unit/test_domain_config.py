@@ -51,12 +51,7 @@ def test_load_config_valid() -> None:
 
 def test_load_config_rejects_extra_key(tmp_path: Path) -> None:
     config_path = tmp_path / "config_extra.yaml"
-    config_path.write_text(
-        "home:\n"
-        "  lat: 48.0\n"
-        "  lon: 11.0\n"
-        "  extra_key: bad\n"
-    )
+    config_path.write_text("home:\n  lat: 48.0\n  lon: 11.0\n  extra_key: bad\n")
     with pytest.raises(ValidationError):
         load_config(config_path)
 
