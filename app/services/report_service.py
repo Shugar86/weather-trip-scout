@@ -20,15 +20,13 @@ class ReportService:
         return ReportPayload(text=text, image_path=image_path)
 
     def build_text(self, ranked: list[PlaceScore], report_date: date) -> str:
-        header = f"🌤 Weather trip scout for {report_date.isoformat()}\n\n"
+        header = f"🌤 Weather trip scout for {report_date.isoformat()}"
         if not ranked:
-            return header + "No good destinations today. Try again tomorrow!"
+            return f"{header}\n\nNo good destinations today. Try again tomorrow!"
 
-        lines = [header, f"Top {len(ranked)} destinations within radius:\n"]
+        lines = [header, "", f"Top {len(ranked)} destinations within radius:", ""]
         for i, ps in enumerate(ranked, start=1):
-            lines.append(
-                f"{i}. {ps.place.name} — score {ps.final_score:.0f}\n"
-                f"   Best window: {ps.best_time_start}–{ps.best_time_end}\n"
-                f"   {ps.summary}"
-            )
+            lines.append(f"{i}. {ps.place.name} — score {ps.final_score:.0f}")
+            lines.append(f"   Best window: {ps.best_time_start}–{ps.best_time_end}")
+            lines.append(f"   {ps.summary}")
         return "\n".join(lines)
