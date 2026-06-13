@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from json import JSONDecodeError
 from unittest.mock import MagicMock, patch
 
@@ -6,9 +6,12 @@ import pytest
 import requests
 
 from app.core.exceptions import ConfigurationError, ProviderError
-from app.domain.models import Point
+from app.domain.models import Place, PlaceScore, Point
 from app.providers.geo.base import GeoProvider
 from app.providers.geo.overpass import OverpassProvider
+from app.providers.maps.base import MapBuilder
+from app.providers.maps.mapbox import MapboxBuilder
+from app.providers.maps.staticmap_osm import StaticMapOSMBuilder
 from app.providers.weather.base import WeatherProvider
 from app.providers.weather.open_meteo import OpenMeteoProvider
 from app.providers.weather.open_weather import OpenWeatherProvider
@@ -336,11 +339,6 @@ def test_open_weather_request_params() -> None:
     assert params["units"] == "metric"
     assert "current,minutely,daily,alerts" in params["exclude"]
 
-from app.providers.maps.base import MapBuilder
-from app.providers.maps.mapbox import MapboxBuilder
-from app.providers.maps.staticmap_osm import StaticMapOSMBuilder
-
-
 def test_staticmap_osm_is_map_builder() -> None:
     builder = StaticMapOSMBuilder()
     assert isinstance(builder, MapBuilder)
@@ -349,3 +347,78 @@ def test_staticmap_osm_is_map_builder() -> None:
 def test_mapbox_requires_token() -> None:
     with pytest.raises(ConfigurationError):
         MapboxBuilder(token=None)
+
+
+def _sample_ranked() -> list[PlaceScore]:
+    return [
+        PlaceScore(
+            place=Place(name="Test Spot", point=Point(lat=48.0, lon=11.0)),
+            final_score=75.0,
+            best_time_start=time(8, 0),
+            best_time_end=time(14, 0),
+            summary="Nice",
+            breakdown={},
+        )
+    ]
+
+
+def test_staticmap_osm_build_map_returns_path() -> None:
+    fake_image = MagicMock()
+    mock_map = MagicMock()
+    mock_map.return_value.render.return_value = fake_image
+    with patch("app.providers.maps.staticmap_osm.StaticMap", mock_map):
+        result = StaticMapOSMBuilder().build_map(
+            _sample_ranked(), Point(lat=48.0, lon=11.0), 10.0
+        )
+    assert result is not None
+    assert result.endswith(".png")
+    fake_image.save.assert_called_once_with(result)
+
+
+def test_staticmap_osm_build_map_empty_ranked_returns_none() -> None:
+    assert (
+        StaticMapOSMBuilder().build_map([], Point(lat=48.0, lon=11.0), 10.0) is None
+    )
+
+
+def test_staticmap_osm_build_map_render_error_returns_none() -> None:
+    mock_map = MagicMock()
+    mock_map.return_value.render.side_effect = OSError("render failed")
+    with patch("app.providers.maps.staticmap_osm.StaticMap", mock_map):
+        result = StaticMapOSMBuilder().build_map(
+            _sample_ranked(), Point(lat=48.0, lon=11.0), 10.0
+        )
+    assert result is None
+
+
+def test_mapbox_build_map_returns_path() -> None:
+    response = MagicMock()
+    response.content = b"pngdata"
+    response.raise_for_status = MagicMock()
+    with patch(
+        "app.providers.maps.mapbox.requests.get", return_value=response
+    ) as mock_get:
+        result = MapboxBuilder(token="dummy").build_map(
+            _sample_ranked(), Point(lat=48.0, lon=11.0), 10.0
+        )
+    assert result is not None
+    assert result.endswith(".png")
+    mock_get.assert_called_once()
+
+
+def test_mapbox_build_map_request_error_returns_none() -> None:
+    with patch(
+        "app.providers.maps.mapbox.requests.get",
+        side_effect=requests.RequestException("boom"),
+    ):
+        result = MapboxBuilder(token="dummy").build_map(
+            _sample_ranked(), Point(lat=48.0, lon=11.0), 10.0
+        )
+    assert result is None
+
+
+def test_mapbox_build_map_empty_ranked_returns_none() -> None:
+    assert (
+        MapboxBuilder(token="dummy").build_map([], Point(lat=48.0, lon=11.0), 10.0)
+        is None
+    )

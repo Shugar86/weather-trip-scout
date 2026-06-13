@@ -1,8 +1,7 @@
 import logging
-import os
 import tempfile
 
-from staticmap import CircleMarker, StaticMap
+from staticmap import CircleMarker, StaticMap  # type: ignore[import-untyped]
 
 from app.domain.models import PlaceScore, Point
 
@@ -35,10 +34,10 @@ class StaticMapOSMBuilder:
 
         try:
             image = m.render()
-            path = os.path.join(tempfile.gettempdir(), "weather_trip_scout_map.png")
-            image.save(path)
-            return path
-        except Exception as exc:
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+                image.save(f.name)
+            return f.name
+        except (OSError, ValueError) as exc:
             logger.warning("Static map rendering failed: %s", exc)
             return None
 

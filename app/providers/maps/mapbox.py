@@ -1,5 +1,4 @@
 import logging
-import os
 import tempfile
 
 import requests
@@ -40,11 +39,14 @@ class MapboxBuilder:
         try:
             response = requests.get(url, timeout=30)
             response.raise_for_status()
-        except requests.RequestException as exc:
-            logger.warning("Mapbox request failed: %s", exc)
+        except requests.RequestException:
+            logger.warning("Mapbox request failed")
             return None
 
-        path = os.path.join(tempfile.gettempdir(), "weather_trip_scout_mapbox.png")
-        with open(path, "wb") as f:
-            f.write(response.content)
-        return path
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as f:
+                f.write(response.content)
+            return f.name
+        except OSError:
+            logger.warning("Mapbox file write failed")
+            return None
