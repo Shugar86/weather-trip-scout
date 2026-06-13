@@ -1,0 +1,37 @@
+home:
+  lat: 48.0
+  lon: 11.0
+
+search:
+  radius_km: 100
+  top_n_places: 5
+  min_acceptable_score: 60
+  mode: towns
+
+time:
+  send_at_local: "07:30"
+  analyze_from: "10:00"
+  analyze_to: "18:00"
+
+weather_preferences:
+  min_temp_c: 14
+  max_temp_c: 24
+  max_wind_kmh: 18
+  max_precip_mm_per_hour: 0.3
+  max_precip_probability: 30
+  max_cloud_cover: 70
+  min_good_window_hours: 3
+
+scoring_weights:
+  precip: 35
+  wind: 20
+  temp: 20
+  cloud: 10
+  distance: 5
+  good_window: 10
+
+providers:
+  weather_primary: open_meteo
+  weather_fallback: open_weather
+  geo: overpass
+  map: staticmap_osm
