@@ -1,5 +1,6 @@
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
+from typing import Any
 
 import requests
 
@@ -17,7 +18,7 @@ class OpenMeteoProvider:
     def get_hourly_forecast(
         self, point: Point, target_date: date
     ) -> list[HourlyForecastPoint]:
-        params = {
+        params: dict[str, Any] = {
             "latitude": point.lat,
             "longitude": point.lon,
             "hourly": [
@@ -27,7 +28,7 @@ class OpenMeteoProvider:
                 "precipitation_probability",
                 "cloudcover",
             ],
-            "timezone": "auto",
+            "timezone": "UTC",
             "start_date": target_date.isoformat(),
             "end_date": target_date.isoformat(),
         }
@@ -39,29 +40,52 @@ class OpenMeteoProvider:
 
         data = response.json()
         hourly = data.get("hourly", {})
-        times = hourly.get("time", [])
-        temps = hourly.get("temperature_2m", [])
-        winds = hourly.get("windspeed_10m", [])
-        precips = hourly.get("precipitation", [])
-        probs = hourly.get("precipitation_probability", [])
-        clouds = hourly.get("cloudcover", [])
+        if not isinstance(hourly, dict):
+            raise ProviderError("Open-Meteo response missing valid hourly data")
 
-        return [
-            HourlyForecastPoint(
-                time=datetime.fromisoformat(t).replace(tzinfo=timezone.utc),
-                temp_c=float(temps[i]),
-                wind_kmh=float(winds[i]),
-                precip_mm=float(precips[i]),
-                precip_probability=(
-                    float(probs[i])
-                    if i < len(probs) and probs[i] is not None
-                    else None
-                ),
-                cloud_cover=(
-                    float(clouds[i])
-                    if i < len(clouds) and clouds[i] is not None
-                    else None
-                ),
-            )
-            for i, t in enumerate(times)
-        ]
+        required_keys = (
+            "time",
+            "temperature_2m",
+            "windspeed_10m",
+            "precipitation",
+            "precipitation_probability",
+            "cloudcover",
+        )
+        for key in required_keys:
+            if key not in hourly:
+                raise ProviderError(f"Open-Meteo response missing required key: {key}")
+
+        times = hourly["time"]
+        temps = hourly["temperature_2m"]
+        winds = hourly["windspeed_10m"]
+        precips = hourly["precipitation"]
+        probs = hourly["precipitation_probability"]
+        clouds = hourly["cloudcover"]
+
+        arrays = (times, temps, winds, precips, probs, clouds)
+        length = len(times)
+        if not all(len(arr) == length for arr in arrays):
+            raise ProviderError("Open-Meteo hourly arrays have inconsistent lengths")
+
+        try:
+            return [
+                HourlyForecastPoint(
+                    time=datetime.fromisoformat(t).replace(tzinfo=UTC),
+                    temp_c=float(temps[i]),
+                    wind_kmh=float(winds[i]),
+                    precip_mm=float(precips[i]),
+                    precip_probability=(
+                        float(probs[i])
+                        if i < len(probs) and probs[i] is not None
+                        else None
+                    ),
+                    cloud_cover=(
+                        float(clouds[i])
+                        if i < len(clouds) and clouds[i] is not None
+                        else None
+                    ),
+                )
+                for i, t in enumerate(times)
+            ]
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            raise ProviderError(f"Open-Meteo response parsing failed: {exc}") from exc

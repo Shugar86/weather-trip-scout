@@ -1,5 +1,6 @@
 import logging
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
+from typing import Any
 
 import requests
 
@@ -24,7 +25,7 @@ class OpenWeatherProvider:
     def get_hourly_forecast(
         self, point: Point, target_date: date
     ) -> list[HourlyForecastPoint]:
-        params = {
+        params: dict[str, Any] = {
             "lat": point.lat,
             "lon": point.lon,
             "appid": self.api_key,
@@ -39,19 +40,40 @@ class OpenWeatherProvider:
 
         data = response.json()
         hourly = data.get("hourly", [])
+        if not isinstance(hourly, list):
+            raise ProviderError("OpenWeather response missing valid hourly data")
 
-        return [
-            HourlyForecastPoint(
-                time=datetime.fromtimestamp(h["dt"], tz=timezone.utc),
-                temp_c=float(h["temp"]),
-                wind_kmh=float(h["wind_speed"]) * 3.6,
-                precip_mm=float(h.get("rain", {}).get("1h", 0))
-                + float(h.get("snow", {}).get("1h", 0)),
-                precip_probability=float(h.get("pop", 0)) * 100
-                if "pop" in h
-                else None,
-                cloud_cover=float(h.get("clouds", 0)),
-            )
-            for h in hourly
-            if datetime.fromtimestamp(h["dt"], tz=timezone.utc).date() == target_date
-        ]
+        points: list[HourlyForecastPoint] = []
+        for h in hourly:
+            if not isinstance(h, dict):
+                raise ProviderError("OpenWeather hourly item is not an object")
+            for required_key in ("dt", "temp", "wind_speed"):
+                if required_key not in h:
+                    raise ProviderError(
+                        f"OpenWeather hourly item missing required key: {required_key}"
+                    )
+
+            time = datetime.fromtimestamp(h["dt"], tz=UTC)
+            if time.date() != target_date:
+                continue
+
+            try:
+                points.append(
+                    HourlyForecastPoint(
+                        time=time,
+                        temp_c=float(h["temp"]),
+                        wind_kmh=float(h["wind_speed"]) * 3.6,
+                        precip_mm=float(h.get("rain", {}).get("1h", 0))
+                        + float(h.get("snow", {}).get("1h", 0)),
+                        precip_probability=float(h["pop"]) * 100
+                        if "pop" in h
+                        else None,
+                        cloud_cover=float(h.get("clouds", 0)),
+                    )
+                )
+            except (AttributeError, TypeError, ValueError) as exc:
+                raise ProviderError(
+                    f"OpenWeather response parsing failed: {exc}"
+                ) from exc
+
+        return points

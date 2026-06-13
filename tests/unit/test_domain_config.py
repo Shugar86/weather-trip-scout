@@ -14,7 +14,7 @@ def test_point_immutable() -> None:
     p = Point(lat=48.0, lon=11.0)
     assert p.lat == 48.0
     with pytest.raises(dataclasses.FrozenInstanceError):
-        p.lat = 0
+        p.lat = 0  # type: ignore[misc]
 
 
 def test_place_creation() -> None:
@@ -66,7 +66,7 @@ def test_settings_loads_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "chat-id")
     monkeypatch.setenv("OPEN_WEATHER_API_KEY", "weather-key")
     monkeypatch.setenv("MAPBOX_TOKEN", "mapbox-token")
-    settings = Settings()
+    settings = Settings()  # type: ignore[call-arg]
     assert settings.telegram_bot_token == "bot-token"
     assert settings.telegram_chat_id == "chat-id"
     assert settings.open_weather_api_key == "weather-key"
