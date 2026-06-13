@@ -1,7 +1,9 @@
+from datetime import time
 from pathlib import Path
+from typing import Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from app.domain.scoring import ScoringWeights, WeatherPreferences
 
@@ -17,14 +19,24 @@ class SearchConfig(BaseModel):
     radius_km: float
     top_n_places: int
     min_acceptable_score: float
-    mode: str
+    mode: Literal["towns", "nature"]
 
 
 class TimeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    send_at_local: str
-    analyze_from: str
-    analyze_to: str
+    send_at_local: time
+    analyze_from: time
+    analyze_to: time
+
+    @field_validator("send_at_local", "analyze_from", "analyze_to", mode="before")
+    @classmethod
+    def _parse_time(cls, value: object) -> time:
+        if isinstance(value, time):
+            return value
+        if isinstance(value, str):
+            hour, minute = map(int, value.split(":"))
+            return time(hour, minute)
+        raise ValueError(f"invalid time value: {value!r}")
 
 
 class ProviderConfig(BaseModel):
