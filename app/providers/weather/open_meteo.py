@@ -35,10 +35,10 @@ class OpenMeteoProvider:
         try:
             response = requests.get(self.BASE_URL, params=params, timeout=30)
             response.raise_for_status()
-        except requests.RequestException as exc:
+            data = response.json()
+        except (requests.RequestException, ValueError) as exc:
             raise ProviderError(f"Open-Meteo request failed: {exc}") from exc
 
-        data = response.json()
         hourly = data.get("hourly", {})
         if not isinstance(hourly, dict):
             raise ProviderError("Open-Meteo response missing valid hourly data")

@@ -10,6 +10,10 @@ from app.domain.models import HourlyForecastPoint, Point
 logger = logging.getLogger(__name__)
 
 
+def _precip_mm(value: Any) -> float:
+    return float(value.get("1h", 0)) if isinstance(value, dict) else 0.0
+
+
 class OpenWeatherProvider:
     """Fallback weather provider; requires an API key."""
 
@@ -35,10 +39,10 @@ class OpenWeatherProvider:
         try:
             response = requests.get(self.BASE_URL, params=params, timeout=30)
             response.raise_for_status()
-        except requests.RequestException as exc:
+            data = response.json()
+        except (requests.RequestException, ValueError) as exc:
             raise ProviderError(f"OpenWeather request failed: {exc}") from exc
 
-        data = response.json()
         hourly = data.get("hourly", [])
         if not isinstance(hourly, list):
             raise ProviderError("OpenWeather response missing valid hourly data")
@@ -63,8 +67,7 @@ class OpenWeatherProvider:
                         time=time,
                         temp_c=float(h["temp"]),
                         wind_kmh=float(h["wind_speed"]) * 3.6,
-                        precip_mm=float(h.get("rain", {}).get("1h", 0))
-                        + float(h.get("snow", {}).get("1h", 0)),
+                        precip_mm=_precip_mm(h.get("rain")) + _precip_mm(h.get("snow")),
                         precip_probability=float(h["pop"]) * 100
                         if "pop" in h
                         else None,

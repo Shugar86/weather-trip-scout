@@ -1,4 +1,5 @@
 from datetime import UTC, date, datetime
+from json import JSONDecodeError
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -210,3 +211,127 @@ def test_overpass_zero_radius_raises_provider_error() -> None:
     provider = OverpassProvider()
     with pytest.raises(ProviderError):
         provider.get_candidate_places(Point(lat=48.0, lon=11.0), 0.0, "towns")
+
+
+def test_open_meteo_json_decode_error_converted_to_provider_error() -> None:
+    provider = OpenMeteoProvider()
+    mock_response = MagicMock()
+    mock_response.json.side_effect = JSONDecodeError("decode error", "doc", 0)
+    with patch(
+        "app.providers.weather.open_meteo.requests.get", return_value=mock_response
+    ):
+        with pytest.raises(ProviderError):
+            provider.get_hourly_forecast(Point(lat=48.0, lon=11.0), date(2024, 6, 1))
+
+
+def test_open_weather_json_decode_error_converted_to_provider_error() -> None:
+    provider = OpenWeatherProvider(api_key="dummy")
+    mock_response = MagicMock()
+    mock_response.json.side_effect = JSONDecodeError("decode error", "doc", 0)
+    with patch(
+        "app.providers.weather.open_weather.requests.get", return_value=mock_response
+    ):
+        with pytest.raises(ProviderError):
+            provider.get_hourly_forecast(Point(lat=48.0, lon=11.0), date(2024, 6, 1))
+
+
+def test_open_meteo_missing_required_key_raises_provider_error() -> None:
+    provider = OpenMeteoProvider()
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"hourly": {"time": ["2024-06-01T00:00"]}}
+    with patch(
+        "app.providers.weather.open_meteo.requests.get", return_value=mock_response
+    ):
+        with pytest.raises(ProviderError):
+            provider.get_hourly_forecast(Point(lat=48.0, lon=11.0), date(2024, 6, 1))
+
+
+def test_open_weather_missing_required_key_raises_provider_error() -> None:
+    provider = OpenWeatherProvider(api_key="dummy")
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"hourly": [{"dt": 1717200000, "temp": 15.0}]}
+    with patch(
+        "app.providers.weather.open_weather.requests.get", return_value=mock_response
+    ):
+        with pytest.raises(ProviderError):
+            provider.get_hourly_forecast(Point(lat=48.0, lon=11.0), date(2024, 6, 1))
+
+
+def test_open_meteo_array_length_mismatch_raises_provider_error() -> None:
+    provider = OpenMeteoProvider()
+    mock_response = MagicMock()
+    mock_response.json.return_value = {
+        "hourly": {
+            "time": ["2024-06-01T00:00", "2024-06-01T01:00"],
+            "temperature_2m": [15.0],
+            "windspeed_10m": [5.0, 6.0],
+            "precipitation": [0.0, 0.0],
+            "precipitation_probability": [0, 0],
+            "cloudcover": [0, 0],
+        }
+    }
+    with patch(
+        "app.providers.weather.open_meteo.requests.get", return_value=mock_response
+    ):
+        with pytest.raises(ProviderError):
+            provider.get_hourly_forecast(Point(lat=48.0, lon=11.0), date(2024, 6, 1))
+
+
+def test_open_meteo_request_params() -> None:
+    provider = OpenMeteoProvider()
+    target = date(2024, 6, 1)
+    response = {
+        "hourly": {
+            "time": ["2024-06-01T00:00"],
+            "temperature_2m": [15.0],
+            "windspeed_10m": [5.0],
+            "precipitation": [0.0],
+            "precipitation_probability": [10],
+            "cloudcover": [20],
+        }
+    }
+    mock_response = MagicMock()
+    mock_response.json.return_value = response
+    with patch(
+        "app.providers.weather.open_meteo.requests.get", return_value=mock_response
+    ) as mock_get:
+        provider.get_hourly_forecast(Point(lat=48.0, lon=11.0), target)
+
+    call_args = mock_get.call_args
+    assert call_args is not None
+    params = call_args.kwargs["params"]
+    assert params["latitude"] == 48.0
+    assert params["longitude"] == 11.0
+    assert params["start_date"] == "2024-06-01"
+    assert params["end_date"] == "2024-06-01"
+    assert params["timezone"] == "UTC"
+    assert "temperature_2m" in params["hourly"]
+
+
+def test_open_weather_request_params() -> None:
+    provider = OpenWeatherProvider(api_key="dummy")
+    target = date(2024, 6, 1)
+    response = {
+        "hourly": [
+            {
+                "dt": 1717200000,
+                "temp": 15.0,
+                "wind_speed": 2.0,
+            }
+        ]
+    }
+    mock_response = MagicMock()
+    mock_response.json.return_value = response
+    with patch(
+        "app.providers.weather.open_weather.requests.get", return_value=mock_response
+    ) as mock_get:
+        provider.get_hourly_forecast(Point(lat=48.0, lon=11.0), target)
+
+    call_args = mock_get.call_args
+    assert call_args is not None
+    params = call_args.kwargs["params"]
+    assert params["lat"] == 48.0
+    assert params["lon"] == 11.0
+    assert params["appid"] == "dummy"
+    assert params["units"] == "metric"
+    assert "current,minutely,daily,alerts" in params["exclude"]
