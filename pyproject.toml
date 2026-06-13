@@ -21,6 +21,7 @@ dev = [
     "mypy>=1.7",
     "types-requests>=2.31",
     "types-PyYAML>=6.0",
+    "pytest-asyncio>=0.21",
 ]
 
 [tool.ruff]
@@ -39,4 +40,5 @@ warn_unused_ignores = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+asyncio_mode = "auto"
 addopts = "--cov=app --cov-report=term-missing --cov-fail-under=50"
