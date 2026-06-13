@@ -51,7 +51,9 @@ def test_perfect_weather_scores_high(
     forecast = _forecast(list(range(10, 19)))
     place = Place("Perfect", Point(48.0, 11.0))
     service = ScoringService(prefs, weights)
-    score = service.score_place(place, forecast, Point(48.0, 11.0))
+    score = service.score_place(
+        place, forecast, Point(48.0, 11.0), time(10, 0), time(18, 0)
+    )
     assert score.final_score >= 95
     assert score.best_time_start == time(10, 0)
     assert score.best_time_end == time(18, 0)
@@ -63,7 +65,9 @@ def test_rainy_weather_scores_low(
     forecast = _forecast(list(range(10, 19)), precip_mm=2.0)
     place = Place("Rainy", Point(48.0, 11.0))
     service = ScoringService(prefs, weights)
-    score = service.score_place(place, forecast, Point(48.0, 11.0))
+    score = service.score_place(
+        place, forecast, Point(48.0, 11.0), time(10, 0), time(18, 0)
+    )
     assert score.final_score < 50
 
 
@@ -72,7 +76,7 @@ def test_empty_forecast_returns_zero(
 ) -> None:
     place = Place("Empty", Point(48.0, 11.0))
     service = ScoringService(prefs, weights)
-    score = service.score_place(place, [], Point(48.0, 11.0))
+    score = service.score_place(place, [], Point(48.0, 11.0), time(10, 0), time(18, 0))
     assert score.final_score == 0
 
 
@@ -85,7 +89,9 @@ def test_partial_good_window_detected(
             hour.wind_kmh = 30.0
     place = Place("Partial", Point(48.0, 11.0))
     service = ScoringService(prefs, weights)
-    score = service.score_place(place, forecast, Point(48.0, 11.0))
+    score = service.score_place(
+        place, forecast, Point(48.0, 11.0), time(10, 0), time(18, 0)
+    )
     assert score.best_time_start == time(12, 0)
     assert score.best_time_end == time(14, 0)
     assert "12:00:00-14:00:00" in score.summary
@@ -97,7 +103,9 @@ def test_null_precip_probability_and_cloud_cover(
     forecast = _forecast(list(range(10, 19)), precip_probability=None, cloud_cover=None)
     place = Place("NullFields", Point(48.0, 11.0))
     service = ScoringService(prefs, weights)
-    score = service.score_place(place, forecast, Point(48.0, 11.0))
+    score = service.score_place(
+        place, forecast, Point(48.0, 11.0), time(10, 0), time(18, 0)
+    )
     assert score.final_score >= 95
 
 
@@ -107,10 +115,18 @@ def test_distance_scoring_same_vs_far(
     forecast = _forecast(list(range(10, 19)))
     service = ScoringService(prefs, weights)
     same = service.score_place(
-        Place("Same", Point(48.0, 11.0)), forecast, Point(48.0, 11.0)
+        Place("Same", Point(48.0, 11.0)),
+        forecast,
+        Point(48.0, 11.0),
+        time(10, 0),
+        time(18, 0),
     )
     far = service.score_place(
-        Place("Far", Point(0.0, 0.0)), forecast, Point(48.0, 11.0)
+        Place("Far", Point(0.0, 0.0)),
+        forecast,
+        Point(48.0, 11.0),
+        time(10, 0),
+        time(18, 0),
     )
     assert same.final_score > far.final_score
     assert same.breakdown["distance"] == 100.0
@@ -123,9 +139,24 @@ def test_breakdown_is_populated(
     forecast = _forecast(list(range(10, 19)))
     place = Place("Breakdown", Point(48.0, 11.0))
     service = ScoringService(prefs, weights)
-    score = service.score_place(place, forecast, Point(48.0, 11.0))
+    score = service.score_place(
+        place, forecast, Point(48.0, 11.0), time(10, 0), time(18, 0)
+    )
     assert score.breakdown == {
         "weather_avg": pytest.approx(100.0),
         "distance": 100.0,
         "good_window": pytest.approx(100.0),
     }
+
+
+def test_forecast_outside_window_returns_zero(
+    prefs: WeatherPreferences, weights: ScoringWeights
+) -> None:
+    forecast = _forecast(list(range(10, 19)))
+    place = Place("Outside", Point(48.0, 11.0))
+    service = ScoringService(prefs, weights)
+    score = service.score_place(
+        place, forecast, Point(48.0, 11.0), time(20, 0), time(22, 0)
+    )
+    assert score.final_score == 0
+    assert score.summary == "No forecast data for analysis window"

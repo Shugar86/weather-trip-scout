@@ -5,12 +5,11 @@ from datetime import date
 from app.config.loader import AppConfig
 from app.config.settings import Settings
 from app.domain.models import PlaceScore, Point
-from app.providers.geo.overpass import OverpassProvider
-from app.providers.maps.base import MapBuilder
-from app.providers.maps.mapbox import MapboxBuilder
-from app.providers.maps.staticmap_osm import StaticMapOSMBuilder
-from app.providers.weather.open_meteo import OpenMeteoProvider
-from app.providers.weather.open_weather import OpenWeatherProvider
+from app.providers.factory import (
+    build_geo_provider,
+    build_map_builder,
+    build_weather_provider,
+)
 from app.services.candidate_service import CandidateService
 from app.services.forecast_service import ForecastService
 from app.services.report_service import ReportService
@@ -29,7 +28,7 @@ class MorningReportJob:
         today = date.today()
         home = Point(lat=self.config.home.lat, lon=self.config.home.lon)
 
-        geo_provider = OverpassProvider()
+        geo_provider = build_geo_provider(self.config.providers.geo)
         candidate_service = CandidateService(geo_provider)
         places = await asyncio.to_thread(
             candidate_service.find_candidates,
@@ -39,10 +38,14 @@ class MorningReportJob:
         )
         logger.info("Found %d candidate places", len(places))
 
-        primary_weather = OpenMeteoProvider()
+        primary_weather = build_weather_provider(
+            self.config.providers.weather_primary, self.settings
+        )
         fallback_weather = (
-            OpenWeatherProvider(self.settings.open_weather_api_key)
-            if self.settings.open_weather_api_key
+            build_weather_provider(
+                self.config.providers.weather_fallback, self.settings
+            )
+            if self.config.providers.weather_fallback
             else None
         )
         forecast_service = ForecastService(primary_weather, fallback_weather)
@@ -59,7 +62,12 @@ class MorningReportJob:
                     forecast_service.get_forecast, place, today
                 )
                 score = await asyncio.to_thread(
-                    scoring_service.score_place, place, forecast, home
+                    scoring_service.score_place,
+                    place,
+                    forecast,
+                    home,
+                    self.config.time.analyze_from,
+                    self.config.time.analyze_to,
                 )
                 if score.final_score >= self.config.search.min_acceptable_score:
                     ranked.append(score)
@@ -71,7 +79,7 @@ class MorningReportJob:
         ranked.sort(key=lambda x: x.final_score, reverse=True)
         ranked = ranked[: self.config.search.top_n_places]
 
-        map_builder = self._build_map_builder()
+        map_builder = build_map_builder(self.config.providers.map, self.settings)
         report_service = ReportService(map_builder)
         report = await asyncio.to_thread(
             report_service.build_report,
@@ -86,8 +94,3 @@ class MorningReportJob:
         )
         await telegram.send_report(report)
         logger.info("Morning report finished")
-
-    def _build_map_builder(self) -> MapBuilder:
-        if self.settings.mapbox_token:
-            return MapboxBuilder(self.settings.mapbox_token)
-        return StaticMapOSMBuilder()

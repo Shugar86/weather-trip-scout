@@ -131,7 +131,18 @@ async def test_job_end_to_end() -> None:
     fake_telegram = FakeTelegramService("token", "123")
 
     with (
-        patch.object(job, "_build_map_builder", return_value=FakeMapBuilder()),
+        patch(
+            "app.jobs.morning_report.build_geo_provider",
+            return_value=FakeGeoProvider(),
+        ),
+        patch(
+            "app.jobs.morning_report.build_weather_provider",
+            return_value=FakeWeatherProvider(),
+        ),
+        patch(
+            "app.jobs.morning_report.build_map_builder",
+            return_value=FakeMapBuilder(),
+        ),
         patch(
             "app.jobs.morning_report.CandidateService",
             return_value=FakeCandidateService(),

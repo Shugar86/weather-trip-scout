@@ -14,10 +14,18 @@ class ScoringService:
         self.weights = weights
 
     def score_place(
-        self, place: Place, forecast: list[HourlyForecastPoint], home: Point
+        self,
+        place: Place,
+        forecast: list[HourlyForecastPoint],
+        home: Point,
+        analyze_from: time,
+        analyze_to: time,
     ) -> PlaceScore:
+        forecast = self._filter_window(forecast, analyze_from, analyze_to)
         if not forecast:
-            return self._zero_score(place)
+            return self._zero_score(
+                place, summary="No forecast data for analysis window"
+            )
 
         hourly_scores = [self._hour_score(h) for h in forecast]
         avg_score = sum(hourly_scores) / len(hourly_scores)
@@ -151,13 +159,29 @@ class ScoringService:
         )
         return 2 * earth_radius_km * math.atan2(math.sqrt(x), math.sqrt(1 - x))
 
-    def _zero_score(self, place: Place) -> PlaceScore:
+    def _filter_window(
+        self,
+        forecast: list[HourlyForecastPoint],
+        analyze_from: time,
+        analyze_to: time,
+    ) -> list[HourlyForecastPoint]:
+        def _in_window(hour: HourlyForecastPoint) -> bool:
+            t = hour.time.time()
+            if analyze_from <= analyze_to:
+                return analyze_from <= t <= analyze_to
+            return t >= analyze_from or t <= analyze_to
+
+        return [h for h in forecast if _in_window(h)]
+
+    def _zero_score(
+        self, place: Place, summary: str = "No forecast data"
+    ) -> PlaceScore:
         return PlaceScore(
             place=place,
             final_score=0.0,
             best_time_start=time(0, 0),
             best_time_end=time(0, 0),
-            summary="No forecast data",
+            summary=summary,
             breakdown={},
         )
 
