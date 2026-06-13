@@ -6,6 +6,8 @@ import requests
 
 from app.core.exceptions import ConfigurationError, ProviderError
 from app.domain.models import Point
+from app.providers.geo.base import GeoProvider
+from app.providers.geo.overpass import OverpassProvider
 from app.providers.weather.base import WeatherProvider
 from app.providers.weather.open_meteo import OpenMeteoProvider
 from app.providers.weather.open_weather import OpenWeatherProvider
@@ -98,3 +100,49 @@ def test_provider_raises_provider_error_on_http_error() -> None:
     ):
         with pytest.raises(ProviderError):
             provider.get_hourly_forecast(Point(lat=48.0, lon=11.0), date(2024, 6, 1))
+
+
+def test_overpass_is_geo_provider() -> None:
+    provider = OverpassProvider()
+    assert isinstance(provider, GeoProvider)
+
+
+def test_overpass_get_candidate_places_mocked() -> None:
+    provider = OverpassProvider()
+    response = {
+        "elements": [
+            {
+                "id": 123,
+                "lat": 48.0,
+                "lon": 11.0,
+                "tags": {"name": "Test Town", "place": "town"},
+            },
+            {
+                "id": 124,
+                "lat": 48.1,
+                "lon": 11.1,
+                "tags": {"name:en": "No Name Peak", "natural": "peak"},
+            },
+            {
+                "id": 125,
+                "lat": 48.2,
+                "lon": 11.2,
+                "tags": {"place": "village"},
+            },
+        ]
+    }
+    mock_response = MagicMock()
+    mock_response.json.return_value = response
+    with patch("app.providers.geo.overpass.requests.post", return_value=mock_response):
+        towns = provider.get_candidate_places(
+            Point(lat=48.0, lon=11.0), 10.0, "towns"
+        )
+        nature = provider.get_candidate_places(
+            Point(lat=48.0, lon=11.0), 5.0, "nature"
+        )
+
+    assert len(towns) == 2
+    assert towns[0].name == "Test Town"
+    assert towns[0].place_id == "123"
+    assert towns[1].name == "No Name Peak"
+    assert isinstance(nature, list)
