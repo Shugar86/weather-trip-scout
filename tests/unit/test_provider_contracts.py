@@ -146,3 +146,67 @@ def test_overpass_get_candidate_places_mocked() -> None:
     assert towns[0].place_id == "123"
     assert towns[1].name == "No Name Peak"
     assert isinstance(nature, list)
+
+
+def test_overpass_query_contains_radius_center_and_tags() -> None:
+    provider = OverpassProvider()
+    response = {
+        "elements": [
+            {
+                "id": 1,
+                "lat": 48.0,
+                "lon": 11.0,
+                "tags": {"name": "Test"},
+            }
+        ]
+    }
+    mock_response = MagicMock()
+    mock_response.json.return_value = response
+    with patch(
+        "app.providers.geo.overpass.requests.post", return_value=mock_response
+    ) as mock_post:
+        provider.get_candidate_places(Point(lat=48.0, lon=11.0), 10.0, "towns")
+
+    call_args = mock_post.call_args
+    assert call_args is not None
+    query = call_args.kwargs["data"]["data"]
+    assert "around:10000,48.0,11.0" in query
+    assert "place~'town|city|village'" in query
+
+
+def test_overpass_unknown_mode_defaults_to_towns() -> None:
+    provider = OverpassProvider()
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"elements": []}
+    with patch(
+        "app.providers.geo.overpass.requests.post", return_value=mock_response
+    ) as mock_post:
+        provider.get_candidate_places(Point(lat=48.0, lon=11.0), 1.0, "unknown")
+
+    query = mock_post.call_args.kwargs["data"]["data"]
+    assert "place~'town|city|village'" in query
+
+
+def test_overpass_request_exception_converted_to_provider_error() -> None:
+    provider = OverpassProvider()
+    with patch(
+        "app.providers.geo.overpass.requests.post",
+        side_effect=requests.RequestException("network error"),
+    ):
+        with pytest.raises(ProviderError):
+            provider.get_candidate_places(Point(lat=48.0, lon=11.0), 1.0, "towns")
+
+
+def test_overpass_json_decode_error_converted_to_provider_error() -> None:
+    provider = OverpassProvider()
+    mock_response = MagicMock()
+    mock_response.json.side_effect = ValueError("not json")
+    with patch("app.providers.geo.overpass.requests.post", return_value=mock_response):
+        with pytest.raises(ProviderError):
+            provider.get_candidate_places(Point(lat=48.0, lon=11.0), 1.0, "towns")
+
+
+def test_overpass_zero_radius_raises_provider_error() -> None:
+    provider = OverpassProvider()
+    with pytest.raises(ProviderError):
+        provider.get_candidate_places(Point(lat=48.0, lon=11.0), 0.0, "towns")

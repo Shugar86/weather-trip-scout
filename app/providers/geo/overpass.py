@@ -1,11 +1,7 @@
-import logging
-
 import requests
 
 from app.core.exceptions import ProviderError
 from app.domain.models import Place, Point
-
-logger = logging.getLogger(__name__)
 
 
 class OverpassProvider:
@@ -16,6 +12,9 @@ class OverpassProvider:
     def get_candidate_places(
         self, center: Point, radius_km: float, mode: str
     ) -> list[Place]:
+        if radius_km <= 0:
+            raise ProviderError("radius_km must be greater than 0")
+
         tag = self._tag_for_mode(mode)
         query = f"""
         [out:json][timeout:25];
@@ -31,12 +30,19 @@ class OverpassProvider:
                 timeout=30,
             )
             response.raise_for_status()
+            data = response.json()
         except requests.RequestException as exc:
             raise ProviderError(f"Overpass request failed: {exc}") from exc
+        except ValueError as exc:
+            raise ProviderError(f"Overpass response is not valid JSON: {exc}") from exc
 
-        elements = response.json().get("elements", [])
+        elements = data.get("elements", [])
         places = []
         for el in elements:
+            lat = el.get("lat")
+            lon = el.get("lon")
+            if lat is None or lon is None:
+                continue
             tags = el.get("tags", {})
             name = tags.get("name") or tags.get("name:en")
             if not name:
@@ -44,7 +50,7 @@ class OverpassProvider:
             places.append(
                 Place(
                     name=name,
-                    point=Point(lat=el["lat"], lon=el["lon"]),
+                    point=Point(lat=lat, lon=lon),
                     place_id=str(el.get("id")),
                     tags=tags,
                 )
