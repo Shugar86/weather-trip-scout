@@ -23,7 +23,10 @@ class ForecastService:
             return self.primary.get_hourly_forecast(place.point, target_date)
         except Exception as exc:
             logger.warning(
-                "Primary weather provider failed for %s: %s", place.name, exc
+                "Primary weather provider failed for %s: %s",
+                place.name,
+                exc,
+                exc_info=True,
             )
             if self.fallback is not None:
                 return self.fallback.get_hourly_forecast(place.point, target_date)

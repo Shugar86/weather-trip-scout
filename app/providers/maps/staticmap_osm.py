@@ -38,7 +38,7 @@ class StaticMapOSMBuilder:
                 image.save(f.name)
             return f.name
         except (OSError, ValueError) as exc:
-            logger.warning("Static map rendering failed: %s", exc)
+            logger.warning("Static map rendering failed: %s", exc, exc_info=True)
             return None
 
     def _score_color(self, score: float) -> str:

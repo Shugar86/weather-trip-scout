@@ -40,7 +40,7 @@ class MapboxBuilder:
             response = requests.get(url, timeout=30)
             response.raise_for_status()
         except requests.RequestException:
-            logger.warning("Mapbox request failed")
+            logger.warning("Mapbox request failed", exc_info=True)
             return None
 
         try:
@@ -48,5 +48,5 @@ class MapboxBuilder:
                 f.write(response.content)
             return f.name
         except OSError:
-            logger.warning("Mapbox file write failed")
+            logger.warning("Mapbox file write failed", exc_info=True)
             return None
