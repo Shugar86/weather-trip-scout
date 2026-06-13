@@ -27,4 +27,4 @@ docker-build:
 	docker build -t weather-trip-scout .
 
 docker-run:
-	docker run --rm --env-file .env -v $(PWD)/config.yaml:/app/config.yaml weather-trip-scout
+	docker run --rm --env-file .env -v $(CURDIR)/config.yaml:/app/config.yaml weather-trip-scout
