@@ -23,38 +23,51 @@
    Обязательные: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.  
    Опциональные: `OPEN_WEATHER_API_KEY`, `MAPBOX_TOKEN`.
 
-2. Установите зависимости:
+2. Создайте и активируйте виртуальное окружение (команды `make` и инструменты ниже запускайте внутри него):
+
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate
+   ```
+
+3. Установите зависимости:
 
    ```bash
    make install
    # или
-   pip install -r requirements.txt
+   pip3 install -r requirements.txt
    ```
 
-3. Настройте `config.yaml`: укажите домашние координаты, радиус поиска, время отправки и предпочтения по погоде.
+4. Настройте `config.yaml`: укажите домашние координаты, радиус поиска, время отправки и предпочтения по погоде.
 
-4. Запустите разовый отчёт:
+5. Запустите разовый отчёт:
 
    ```bash
    make run
    # или
-   python -m app.main run
+   python3 -m app.main run
    ```
 
 ## Docker
 
 ```bash
-docker-compose up --build
+docker compose up --build
 ```
 
 `docker-compose.yml` монтирует `config.yaml` и читает секреты из `.env`.
+
+> Для локального разового запуска используйте:
+>
+> ```bash
+> docker compose up --build --abort-on-container-exit
+> ```
 
 ## Cron
 
 Ежедневное выполнение в 7:30 по местному времени (пример для crontab):
 
 ```cron
-30 7 * * * cd /path/to/weather-trip-scout && /usr/bin/docker-compose up --build --abort-on-container-exit >> /tmp/weather-trip-scout.log 2>&1
+30 7 * * * cd /path/to/weather-trip-scout && /usr/bin/docker compose up --build --abort-on-container-exit >> /tmp/weather-trip-scout.log 2>&1
 ```
 
 Или без Docker:
@@ -69,11 +82,11 @@ docker-compose up --build
 |-----------|-----------|----------|
 | **Open-Meteo** | Основной прогноз погоды | Не нужен |
 | **OpenWeatherMap** | Резервный прогноз погоды | `OPEN_WEATHER_API_KEY` |
-| **Overpass / Nominatim** | Поиск городов и геокодинг | Не нужен |
+| **Overpass / OSM** | Поиск городов и достопримечательностей | Не нужен |
 | **staticmap + OSM** | Генерация карты | Не нужен |
 | **Mapbox** | Альтернативная генерация карты | `MAPBOX_TOKEN` |
 
-Open-Meteo, Overpass, Nominatim, staticmap и OSM — бесплатные и не требуют регистрации.
+Open-Meteo, Overpass, staticmap и OSM — бесплатные и не требуют регистрации.
 
 ## Тесты и линтеры
 

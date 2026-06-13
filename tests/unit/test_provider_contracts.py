@@ -174,6 +174,20 @@ def test_overpass_query_contains_radius_center_and_tags() -> None:
     assert "place~'town|city|village'" in query
 
 
+def test_overpass_request_uses_identity_accept_encoding() -> None:
+    provider = OverpassProvider()
+    mock_response = MagicMock()
+    mock_response.json.return_value = {"elements": []}
+    with patch(
+        "app.providers.geo.overpass.requests.post", return_value=mock_response
+    ) as mock_post:
+        provider.get_candidate_places(Point(lat=48.0, lon=11.0), 1.0, "towns")
+
+    call_args = mock_post.call_args
+    assert call_args is not None
+    assert call_args.kwargs["headers"] == {"Accept-Encoding": "identity"}
+
+
 def test_overpass_unknown_mode_defaults_to_towns() -> None:
     provider = OverpassProvider()
     mock_response = MagicMock()

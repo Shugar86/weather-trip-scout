@@ -27,6 +27,7 @@ class OverpassProvider:
             response = requests.post(
                 self.BASE_URL,
                 data={"data": query},
+                headers={"Accept-Encoding": "identity"},
                 timeout=30,
             )
             response.raise_for_status()

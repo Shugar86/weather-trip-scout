@@ -19,8 +19,10 @@
 
 ## Команды
 
+Все команды ниже выполняйте внутри виртуального окружения (например, после `source .venv/bin/activate`).
+
 ```bash
-make install    # установить зависимости
+make install    # установить зависимости (pip3)
 make run        # одиночный отчёт
 make report     # то же самое
 make test       # pytest + coverage

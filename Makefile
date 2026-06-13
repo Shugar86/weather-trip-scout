@@ -1,8 +1,8 @@
 .PHONY: install test lint format check run report docker-build docker-run
 
 install:
-	pip install -r requirements.txt
-	pip install -e ".[dev]"
+	pip3 install -r requirements.txt
+	pip3 install -e ".[dev]"
 
 test:
 	pytest -q
@@ -18,10 +18,10 @@ format:
 check: lint test
 
 run:
-	python -m app.main run
+	python3 -m app.main run
 
 report:
-	python -m app.main report
+	python3 -m app.main report
 
 docker-build:
 	docker build -t weather-trip-scout .
