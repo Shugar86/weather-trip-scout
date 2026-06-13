@@ -335,3 +335,17 @@ def test_open_weather_request_params() -> None:
     assert params["appid"] == "dummy"
     assert params["units"] == "metric"
     assert "current,minutely,daily,alerts" in params["exclude"]
+
+from app.providers.maps.base import MapBuilder
+from app.providers.maps.mapbox import MapboxBuilder
+from app.providers.maps.staticmap_osm import StaticMapOSMBuilder
+
+
+def test_staticmap_osm_is_map_builder() -> None:
+    builder = StaticMapOSMBuilder()
+    assert isinstance(builder, MapBuilder)
+
+
+def test_mapbox_requires_token() -> None:
+    with pytest.raises(ConfigurationError):
+        MapboxBuilder(token=None)
