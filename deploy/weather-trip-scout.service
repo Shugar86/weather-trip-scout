@@ -1,8 +1,11 @@
 [Unit]
 Description=Weather Trip Scout morning report
+After=network.target
 
 [Service]
 Type=oneshot
+User=weather-trip-scout
+Group=weather-trip-scout
 WorkingDirectory=/opt/weather-trip-scout
 ExecStart=/opt/weather-trip-scout/.venv/bin/python -m app.main run
 EnvironmentFile=/opt/weather-trip-scout/.env

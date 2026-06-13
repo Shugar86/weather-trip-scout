@@ -2,6 +2,7 @@
 Description=Run weather-trip-scout every morning
 
 [Timer]
+Unit=weather-trip-scout.service
 OnCalendar=*-*-* 07:30:00
 Persistent=true
 

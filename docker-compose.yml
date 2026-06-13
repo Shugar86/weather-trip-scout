@@ -1,8 +1,7 @@
-version: "3.9"
-
 services:
   weather-trip-scout:
     build: .
     env_file: .env
+    restart: unless-stopped
     volumes:
       - ./config.yaml:/app/config.yaml:ro
