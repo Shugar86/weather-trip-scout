@@ -1,32 +1,56 @@
+from __future__ import annotations
+
 import argparse
 import asyncio
 import logging
 import sys
+from typing import TYPE_CHECKING
 
-from app.config.loader import AppConfig, load_config  # noqa: F401
+from pydantic import ValidationError
+
+from app.config.loader import load_config
 from app.config.settings import Settings
+from app.core.exceptions import WeatherTripScoutError
 from app.jobs.morning_report import MorningReportJob
+
+if TYPE_CHECKING:
+    from app.config.loader import AppConfig
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 
+logger = logging.getLogger(__name__)
+
+
+async def _run_job(settings: Settings, config: AppConfig) -> None:
+    await MorningReportJob(settings, config).run()
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Weather trip scout")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    run_parser = subparsers.add_parser("run", help="Run morning report job")
-    run_parser.add_argument("--config", default="config.yaml")
+    for name in ("run", "report"):
+        subparser = subparsers.add_parser(name, help="Run morning report job")
+        subparser.add_argument("--config", default="config.yaml")
 
     args = parser.parse_args(argv)
 
-    settings = Settings()  # type: ignore[call-arg]
-    config = load_config(args.config)
-
-    if args.command == "run":
-        asyncio.run(MorningReportJob(settings, config).run())
+    try:
+        # pydantic-settings reads values from the environment; mypy still expects
+        # explicit constructor arguments for required fields.
+        settings = Settings()  # type: ignore[call-arg]
+        config = load_config(args.config)
+        if args.command in {"run", "report"}:
+            asyncio.run(_run_job(settings, config))
+    except WeatherTripScoutError as exc:
+        logger.error("Error: %s", exc)
+        return 1
+    except ValidationError as exc:
+        logger.error("Configuration validation error: %s", exc)
+        return 1
 
     return 0
 

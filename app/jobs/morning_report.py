@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from datetime import date
 
@@ -25,12 +26,16 @@ class MorningReportJob:
         self.config = config
 
     async def run(self) -> None:
+        today = date.today()
         home = Point(lat=self.config.home.lat, lon=self.config.home.lon)
 
         geo_provider = OverpassProvider()
         candidate_service = CandidateService(geo_provider)
-        places = candidate_service.find_candidates(
-            home, self.config.search.radius_km, self.config.search.mode
+        places = await asyncio.to_thread(
+            candidate_service.find_candidates,
+            home,
+            self.config.search.radius_km,
+            self.config.search.mode,
         )
         logger.info("Found %d candidate places", len(places))
 
@@ -50,20 +55,30 @@ class MorningReportJob:
         ranked: list[PlaceScore] = []
         for place in places:
             try:
-                forecast = forecast_service.get_forecast(place, date.today())
-                score = scoring_service.score_place(place, forecast, home)
+                forecast = await asyncio.to_thread(
+                    forecast_service.get_forecast, place, today
+                )
+                score = await asyncio.to_thread(
+                    scoring_service.score_place, place, forecast, home
+                )
                 if score.final_score >= self.config.search.min_acceptable_score:
                     ranked.append(score)
             except Exception as exc:
-                logger.warning("Failed to process place %s: %s", place.name, exc)
+                logger.warning(
+                    "Failed to process place %s: %s", place.name, exc, exc_info=True
+                )
 
         ranked.sort(key=lambda x: x.final_score, reverse=True)
         ranked = ranked[: self.config.search.top_n_places]
 
         map_builder = self._build_map_builder()
         report_service = ReportService(map_builder)
-        report = report_service.build_report(
-            ranked, date.today(), home, self.config.search.radius_km
+        report = await asyncio.to_thread(
+            report_service.build_report,
+            ranked,
+            today,
+            home,
+            self.config.search.radius_km,
         )
 
         telegram = TelegramService(
