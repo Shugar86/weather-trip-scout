@@ -1,26 +1,39 @@
 # Weather Trip Scout
 
-Асинхронный Python-агент, который каждое утро анализирует погоду в радиусе до 100 км от дома и присылает в Telegram подборку лучших направлений для поездки с картой и прогнозом.
+> Тихий утренний советчик: находит лучшие направления для поездки в радиусе до 100 км и присылает в Telegram прогноз с картой.
 
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/)
 [![Ruff](https://img.shields.io/badge/linter-ruff-green.svg)](https://docs.astral.sh/ruff/)
 [![Mypy](https://img.shields.io/badge/types-mypy-blue.svg)](https://mypy-lang.org/)
 [![pytest](https://img.shields.io/badge/tests-pytest-blue.svg)](https://docs.pytest.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-yellow.svg)](./LICENSE)
 
 ---
 
-## Что делает
+## Что это
 
-Каждый день в заданное время (через cron / systemd timer) или по ручной команде:
+Weather Trip Scout — это небольшой Python-агент, который берёт на себя рутину «а куда бы съездить сегодня?». Каждое утро он сам смотрит погоду вокруг домашней точки, оценивает города, деревни и природные объекты по температуре, осадкам, ветру и облачности, а затем присылает в Telegram короткий отчёт: куда стоит поехать, во сколько лучше выезжать и почему.
 
-1. **Находит кандидатов** — города, деревни, природные объекты в радиусе `search.radius_km` км от дома через Overpass API (OpenStreetMap).
-2. **Забирает прогноз** — почасовая погода на сегодня от Open-Meteo; при сбое переключается на OpenWeatherMap (если задан ключ).
-3. **Оценивает места** по температуре, осадкам, вероятности дождя, ветру, облачности, расстоянию и длине непрерывного «хорошего окна» в заданном диапазоне времени.
-4. **Выбирает топ** — до `search.top_n_places` мест с оценкой не ниже `search.min_acceptable_score`.
-5. **Строит карту** — статическая PNG с домом, радиусом и маркерами лучших мест (OSM бесплатно; Mapbox — опционально).
-6. **Отправляет отчёт** — текст + карта в Telegram-чат или канал.
+Если хороших направлений нет — он честно скажет об этом и не выдумает «почти хорошую» погоду.
 
-Если хороших направлений нет, агент честно сообщит об этом.
+### Для кого
+
+- Для тех, кто живёт в городе и хочет выбираться на природу или в соседние города по выходным.
+- Для владельцев дачи/дома, которым важен прогноз на день в радиусе поездки.
+- Для любителей автоматизации, кому нравится получать один аккуратный отчёт вместо бесконечного свайпинга по погодным приложениям.
+
+---
+
+## Возможности
+
+- **Поиск мест** в радиусе до 100 км через Overpass API / OpenStreetMap.
+- **Прогноз погоды** на сегодня от Open-Meteo (без ключа) с fallback на OpenWeatherMap.
+- **Умный скоринг** мест по температуре, осадкам, ветру, облачности, расстоянию и длине «хорошего окна».
+- **Статическая карта** PNG с домом, радиусом и маркерами топ-мест (OSM бесплатно; Mapbox — опционально).
+- **Telegram-отчёт** текстом + изображением карты.
+- **Гибкая конфигурация** через `config.yaml`: координаты дома, пороги погоды, веса факторов, провайдеры.
+- **Запуск по расписанию** через cron / systemd timer или вручную.
+- **Docker-окружение** «из коробки».
 
 ---
 
@@ -31,6 +44,8 @@
 ```bash
 cp .env.example .env
 ```
+
+Открой `.env` и заполни:
 
 | Переменная | Обязательная | Описание |
 |---|---|---|
@@ -46,16 +61,16 @@ python3 -m venv .venv
 source .venv/bin/activate
 
 make install
-# или: pip install -r requirements.txt
+# или: pip install -r requirements.txt && pip install -e ".[dev]"
 ```
 
 ### 3. Конфигурация
 
-Отредактируйте `config.yaml`:
+Отредактируй `config.yaml`:
 
 ```yaml
 home:
-  lat: 48.1351   # ваши координаты
+  lat: 48.1351   # твои координаты
   lon: 11.5820
 
 search:
@@ -102,7 +117,7 @@ make run
 # или: python -m app.main run
 ```
 
-Ручной отчёт (алиас):
+Алиас с тем же смыслом:
 
 ```bash
 make report
@@ -146,27 +161,44 @@ sudo systemctl enable --now weather-trip-scout.timer
 
 ---
 
-## Архитектура
+## Архитектура и стек
+
+| Область | Технология |
+|---------|------------|
+| Язык | Python 3.12+ |
+| Конфигурация | Pydantic v2, pydantic-settings, PyYAML |
+| Погода | Open-Meteo (primary), OpenWeatherMap (fallback) |
+| Гео-поиск | Overpass API / OpenStreetMap |
+| Карты | `staticmap` + OSM; Mapbox — опционально |
+| Telegram | `python-telegram-bot` |
+| Качество кода | pytest, pytest-cov, pytest-asyncio, ruff, mypy |
+| Автоматизация | Makefile, Docker, systemd |
+
+### Структура проекта
 
 ```text
-app/
-├── config/           # Pydantic-модели для config.yaml и .env
-├── core/             # Базовые исключения
-├── domain/           # Чистые dataclass-модели и scoring-конфиг
-├── providers/        # Protocol-based адаптеры
-│   ├── weather/      # Open-Meteo (primary), OpenWeatherMap (fallback)
-│   ├── geo/          # Overpass / OSM
-│   └── maps/         # staticmap+OSM (default), Mapbox (optional)
-├── services/         # Stateless бизнес-логика
-│   ├── candidate_service.py
-│   ├── forecast_service.py
-│   ├── scoring_service.py
-│   ├── report_service.py
-│   └── telegram_service.py
-├── jobs/             # Сценарии запуска
-│   └── morning_report.py
-└── main.py           # CLI entrypoint
+weather-trip-scout/
+├── app/
+│   ├── config/           # Pydantic-модели для config.yaml и .env
+│   ├── core/             # Базовые исключения
+│   ├── domain/           # Чистые dataclass-модели и scoring-конфиг
+│   ├── providers/        # Protocol-based адаптеры
+│   │   ├── weather/      # Open-Meteo, OpenWeatherMap
+│   │   ├── geo/          # Overpass / OSM
+│   │   └── maps/         # staticmap+OSM, Mapbox
+│   ├── services/         # Stateless бизнес-логика
+│   ├── jobs/             # Сценарии запуска
+│   └── main.py           # CLI entrypoint
+├── deploy/               # systemd unit и timer
+├── tests/                # unit + интеграционные тесты
+├── config.yaml           # Пользовательская конфигурация
+├── pyproject.toml        # Метаданные и настройки инструментов
+├── Makefile              # Стандартные команды
+├── Dockerfile
+└── docker-compose.yml
 ```
+
+### Принципы
 
 - **Domain** не зависит от внешнего мира.
 - **Providers** реализуют `Protocol` и легко заменяются.
@@ -199,21 +231,38 @@ make format      # ruff format + auto-fix
 make check       # lint + test
 ```
 
-Состояние на момент релиза:
+Состояние проекта:
 
-- **55 тестов**, покрытие ~85%
-- `mypy --strict` — без ошибок
-- `ruff check app tests` — чисто
+- 55+ тестов, покрытие ~85%.
+- `mypy --strict` — без ошибок.
+- `ruff check app tests` — чисто.
+
+---
+
+## Характер проекта
+
+Вайб: **calm** — «тихий утренний советчик».
+
+1. **Честность прежде всего.** Нет хороших направлений — скажем об этом прямо.
+2. **Никакого хайпа.** Никаких «ЛУЧШИЙ ДЕНЬ ДЛЯ ПОЕЗДКИ!!!» — только факты, оценки и карта.
+3. **Бережное отношение к данным.** Работаем с бесплатными API по умолчанию; fallback включается только при наличии ключа.
 
 ---
 
 ## Лицензия
 
-MIT — см. [LICENSE](./LICENSE) (если файл добавлен).
+[MIT](./LICENSE) — см. файл `LICENSE`.
 
 ---
 
-## Roadmap / известные ограничения
+## Участие и история изменений
+
+- [CONTRIBUTING.md](./CONTRIBUTING.md) — как поучаствовать.
+- [CHANGELOG.md](./CHANGELOG.md) — что нового.
+
+---
+
+## Известные ограничения и roadmap
 
 - `app/main.py` пока не покрыт тестами.
 - Временные PNG-файлы карт не удаляются автоматически после отправки.
