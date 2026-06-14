@@ -7,6 +7,7 @@ search:
   top_n_places: 5
   min_acceptable_score: 60
   mode: towns
+  max_candidates: 40
 
 time:
   send_at_local: "07:30"

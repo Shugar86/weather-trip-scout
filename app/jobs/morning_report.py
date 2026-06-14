@@ -4,6 +4,7 @@ from datetime import date
 
 from app.config.loader import AppConfig
 from app.config.settings import Settings
+from app.core.exceptions import ConfigurationError
 from app.domain.models import PlaceScore, Point
 from app.providers.factory import (
     build_geo_provider,
@@ -24,7 +25,7 @@ class MorningReportJob:
         self.settings = settings
         self.config = config
 
-    async def run(self) -> None:
+    async def run(self, dry_run: bool = False) -> None:
         today = date.today()
         home = Point(lat=self.config.home.lat, lon=self.config.home.lon)
 
@@ -35,19 +36,22 @@ class MorningReportJob:
             home,
             self.config.search.radius_km,
             self.config.search.mode,
+            self.config.search.max_candidates,
         )
         logger.info("Found %d candidate places", len(places))
 
         primary_weather = build_weather_provider(
             self.config.providers.weather_primary, self.settings
         )
-        fallback_weather = (
-            build_weather_provider(
-                self.config.providers.weather_fallback, self.settings
-            )
-            if self.config.providers.weather_fallback
-            else None
-        )
+        fallback_weather = None
+        if self.config.providers.weather_fallback:
+            try:
+                fallback_weather = build_weather_provider(
+                    self.config.providers.weather_fallback, self.settings
+                )
+            except ConfigurationError as exc:
+                # A missing fallback key must not break the free primary provider.
+                logger.warning("Weather fallback unavailable, skipping: %s", exc)
         forecast_service = ForecastService(primary_weather, fallback_weather)
 
         scoring_service = ScoringService(
@@ -88,6 +92,19 @@ class MorningReportJob:
             home,
             self.config.search.radius_km,
         )
+
+        if dry_run:
+            logger.info("Dry run: report not sent to Telegram")
+            print(report.text)
+            if report.image_path:
+                print(f"\n[map image: {report.image_path}]")
+            return
+
+        if not self.settings.telegram_bot_token or not self.settings.telegram_chat_id:
+            raise ConfigurationError(
+                "TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID are required to send a report "
+                "(use --dry-run to preview without sending)"
+            )
 
         telegram = TelegramService(
             self.settings.telegram_bot_token, self.settings.telegram_chat_id

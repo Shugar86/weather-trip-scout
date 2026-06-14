@@ -8,6 +8,10 @@ class OverpassProvider:
     """OSM-based candidate places within a radius."""
 
     BASE_URL = "https://overpass-api.de/api/interpreter"
+    # Overpass returns 406 for the default python-requests UA; identify ourselves.
+    USER_AGENT = (
+        "weather-trip-scout/0.1 (+https://github.com/Shugar86/weather-trip-scout)"
+    )
 
     def get_candidate_places(
         self, center: Point, radius_km: float, mode: str
@@ -27,7 +31,10 @@ class OverpassProvider:
             response = requests.post(
                 self.BASE_URL,
                 data={"data": query},
-                headers={"Accept-Encoding": "identity"},
+                headers={
+                    "Accept-Encoding": "identity",
+                    "User-Agent": self.USER_AGENT,
+                },
                 timeout=30,
             )
             response.raise_for_status()

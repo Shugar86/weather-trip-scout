@@ -76,10 +76,12 @@ cp .env.example .env
 
 | Переменная | Обязательная | Описание |
 |---|---|---|
-| `TELEGRAM_BOT_TOKEN` | да | Токен бота от [@BotFather](https://t.me/BotFather) |
-| `TELEGRAM_CHAT_ID` | да | ID чата или канала для отчётов |
+| `TELEGRAM_BOT_TOKEN` | да* | Токен бота от [@BotFather](https://t.me/BotFather) |
+| `TELEGRAM_CHAT_ID` | да* | ID чата или канала для отчётов |
 | `OPEN_WEATHER_API_KEY` | нет | Ключ [OpenWeatherMap](https://openweathermap.org/api) для fallback |
 | `MAPBOX_TOKEN` | нет | Токен [Mapbox](https://docs.mapbox.com/help/getting-started/access-tokens/) для альтернативной карты |
+
+\* Токены Telegram нужны только для реальной отправки. Для предпросмотра отчёта используй `--dry-run` (см. ниже) — он работает без бота.
 
 ### 3. Конфигурация
 
@@ -107,6 +109,12 @@ make run
 ```bash
 make report
 # или: python -m app.main report
+```
+
+Предпросмотр без отправки в Telegram (отчёт печатается в консоль, токены не нужны):
+
+```bash
+python -m app.main report --dry-run
 ```
 
 ---
@@ -325,7 +333,7 @@ make check       # lint + test
 
 ## Известные ограничения и roadmap
 
-- `app/main.py` пока не покрыт тестами.
+- Прогноз запрашивается для каждого кандидата последовательно; число мест ограничено `search.max_candidates` (по умолчанию 40), чтобы не упереться в лимиты бесплатных API.
 - Временные PNG-файлы карт не удаляются автоматически после отправки.
 - `MapboxBuilder` показывает только центр карты без маркеров мест; полноценная карта доступна через `staticmap_osm`.
 - `send_at_local` в конфиге задаёт целевое время, но реальный запуск управляется cron / systemd.

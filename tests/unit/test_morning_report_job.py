@@ -1,8 +1,11 @@
 from datetime import date, datetime
 from unittest.mock import patch
 
+import pytest
+
 from app.config.loader import AppConfig
 from app.config.settings import Settings
+from app.core.exceptions import ConfigurationError
 from app.domain.models import (
     HourlyForecastPoint,
     Place,
@@ -99,7 +102,13 @@ class FakeMapBuilder(MapBuilder):
 
 
 class FakeCandidateService:
-    def find_candidates(self, home: Point, radius_km: float, mode: str) -> list[Place]:
+    def find_candidates(
+        self,
+        home: Point,
+        radius_km: float,
+        mode: str,
+        max_candidates: int | None = None,
+    ) -> list[Place]:
         return FakeGeoProvider().get_candidate_places(home, radius_km, mode)
 
 
@@ -161,3 +170,127 @@ async def test_job_end_to_end() -> None:
     assert fake_telegram.sent_text is not None
     assert "Weather trip scout for" in fake_telegram.sent_text
     assert "Test Town — score" in fake_telegram.sent_text
+
+
+async def test_job_dry_run_does_not_send(capsys: object) -> None:
+    config = _make_config()
+    # No Telegram credentials at all — dry run must still work.
+    settings = Settings.model_construct(
+        telegram_bot_token=None,
+        telegram_chat_id=None,
+        open_weather_api_key=None,
+        mapbox_token=None,
+    )
+
+    job = MorningReportJob(settings, config)
+
+    with (
+        patch(
+            "app.jobs.morning_report.build_geo_provider",
+            return_value=FakeGeoProvider(),
+        ),
+        patch(
+            "app.jobs.morning_report.build_weather_provider",
+            return_value=FakeWeatherProvider(),
+        ),
+        patch(
+            "app.jobs.morning_report.build_map_builder",
+            return_value=FakeMapBuilder(),
+        ),
+        patch(
+            "app.jobs.morning_report.CandidateService",
+            return_value=FakeCandidateService(),
+        ),
+        patch(
+            "app.jobs.morning_report.ForecastService",
+            return_value=FakeForecastService(),
+        ),
+        patch("app.jobs.morning_report.TelegramService") as telegram_cls,
+    ):
+        await job.run(dry_run=True)
+
+    telegram_cls.assert_not_called()
+    out = capsys.readouterr().out  # type: ignore[attr-defined]
+    assert "Test Town — score" in out
+
+
+async def test_job_raises_without_credentials() -> None:
+    config = _make_config()
+    settings = Settings.model_construct(
+        telegram_bot_token=None,
+        telegram_chat_id=None,
+        open_weather_api_key=None,
+        mapbox_token=None,
+    )
+
+    job = MorningReportJob(settings, config)
+
+    with (
+        patch(
+            "app.jobs.morning_report.build_geo_provider",
+            return_value=FakeGeoProvider(),
+        ),
+        patch(
+            "app.jobs.morning_report.build_weather_provider",
+            return_value=FakeWeatherProvider(),
+        ),
+        patch(
+            "app.jobs.morning_report.build_map_builder",
+            return_value=FakeMapBuilder(),
+        ),
+        patch(
+            "app.jobs.morning_report.CandidateService",
+            return_value=FakeCandidateService(),
+        ),
+        patch(
+            "app.jobs.morning_report.ForecastService",
+            return_value=FakeForecastService(),
+        ),
+    ):
+        with pytest.raises(ConfigurationError):
+            await job.run()
+
+
+async def test_job_skips_unavailable_fallback() -> None:
+    config = _make_config()
+    settings = Settings.model_construct(
+        telegram_bot_token="token",
+        telegram_chat_id="123",
+        open_weather_api_key=None,
+        mapbox_token=None,
+    )
+
+    job = MorningReportJob(settings, config)
+    fake_telegram = FakeTelegramService("token", "123")
+
+    def _build_weather(name: str, _settings: Settings) -> WeatherProvider:
+        # Primary is free; the open_weather fallback has no key and must be skipped.
+        if name == "open_weather":
+            raise ConfigurationError("OPEN_WEATHER_API_KEY is required")
+        return FakeWeatherProvider()
+
+    with (
+        patch(
+            "app.jobs.morning_report.build_geo_provider",
+            return_value=FakeGeoProvider(),
+        ),
+        patch(
+            "app.jobs.morning_report.build_weather_provider",
+            side_effect=_build_weather,
+        ),
+        patch(
+            "app.jobs.morning_report.build_map_builder",
+            return_value=FakeMapBuilder(),
+        ),
+        patch(
+            "app.jobs.morning_report.CandidateService",
+            return_value=FakeCandidateService(),
+        ),
+        patch(
+            "app.jobs.morning_report.TelegramService",
+            return_value=fake_telegram,
+        ),
+    ):
+        await job.run()
+
+    assert fake_telegram.sent_text is not None

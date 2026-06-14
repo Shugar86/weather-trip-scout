@@ -24,8 +24,8 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-async def _run_job(settings: Settings, config: AppConfig) -> None:
-    await MorningReportJob(settings, config).run()
+async def _run_job(settings: Settings, config: AppConfig, dry_run: bool) -> None:
+    await MorningReportJob(settings, config).run(dry_run=dry_run)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -35,16 +35,20 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("run", "report"):
         subparser = subparsers.add_parser(name, help="Run morning report job")
         subparser.add_argument("--config", default="config.yaml")
+        subparser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Build the report and print it instead of sending to Telegram",
+        )
 
     args = parser.parse_args(argv)
 
     try:
-        # pydantic-settings reads values from the environment; mypy still expects
-        # explicit constructor arguments for required fields.
-        settings = Settings()  # type: ignore[call-arg]
+        # pydantic-settings reads values from the environment / .env file.
+        settings = Settings()
         config = load_config(args.config)
         if args.command in {"run", "report"}:
-            asyncio.run(_run_job(settings, config))
+            asyncio.run(_run_job(settings, config, args.dry_run))
     except WeatherTripScoutError as exc:
         logger.error("Error: %s", exc)
         return 1

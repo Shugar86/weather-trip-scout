@@ -20,6 +20,7 @@ class SearchConfig(BaseModel):
     top_n_places: int
     min_acceptable_score: float
     mode: Literal["towns", "nature"]
+    max_candidates: int = 40
 
 
 class TimeConfig(BaseModel):

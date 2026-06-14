@@ -1,7 +1,7 @@
 import logging
-import math
 from datetime import date, datetime, time, timedelta
 
+from app.domain.geo import haversine_km
 from app.domain.models import HourlyForecastPoint, Place, PlaceScore, Point
 from app.domain.scoring import ScoringWeights, WeatherPreferences
 
@@ -41,7 +41,7 @@ class ScoringService:
             else 0
         )
 
-        distance_km = self._haversine(home, place.point)
+        distance_km = haversine_km(home, place.point)
         distance_score = max(0.0, 100.0 - distance_km)
 
         good_window_score = min(
@@ -147,17 +147,6 @@ class ScoringService:
                 or hour.cloud_cover <= self.prefs.max_cloud_cover
             )
         )
-
-    def _haversine(self, a: Point, b: Point) -> float:
-        earth_radius_km = 6371.0
-        phi1, phi2 = math.radians(a.lat), math.radians(b.lat)
-        dphi = math.radians(b.lat - a.lat)
-        dlambda = math.radians(b.lon - a.lon)
-        x = (
-            math.sin(dphi / 2) ** 2
-            + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
-        )
-        return 2 * earth_radius_km * math.atan2(math.sqrt(x), math.sqrt(1 - x))
 
     def _filter_window(
         self,

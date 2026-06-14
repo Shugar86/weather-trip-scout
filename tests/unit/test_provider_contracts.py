@@ -185,7 +185,10 @@ def test_overpass_request_uses_identity_accept_encoding() -> None:
 
     call_args = mock_post.call_args
     assert call_args is not None
-    assert call_args.kwargs["headers"] == {"Accept-Encoding": "identity"}
+    headers = call_args.kwargs["headers"]
+    assert headers["Accept-Encoding"] == "identity"
+    # Overpass rejects the default python-requests UA with 406.
+    assert "weather-trip-scout" in headers["User-Agent"]
 
 
 def test_overpass_unknown_mode_defaults_to_towns() -> None:
