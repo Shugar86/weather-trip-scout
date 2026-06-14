@@ -1,12 +1,14 @@
 # Changelog
 
-Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.0.0/),
+Все значимые изменения в проекте фиксируются в этом файле.
+
+Формат основан на [Keep a Changelog](https://keepachangelog.com/ru/1.1.0/),
 и этот проект придерживается [Semantic Versioning](https://semver.org/lang/ru/).
 
 ## [Unreleased]
 
 ### Added
-- Базовая структура CHANGELOG.
+- Полированная документация: README, AGENTS.md, CONTRIBUTING.md, CHANGELOG.md.
 
 ## [0.1.0] — 2026-06-13
 
@@ -28,3 +30,6 @@
 ### Fixed
 - Обработка ошибок провайдеров с fallback и пропуском «битого» места.
 - Безопасный Dockerfile с непривилегированным пользователем.
+
+[Unreleased]: https://github.com/Shugar86/weather-trip-scout/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Shugar86/weather-trip-scout/releases/tag/v0.1.0
